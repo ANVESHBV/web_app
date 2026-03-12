@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UI Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0a0a0b;
+      --surface: #111113;
+      --card:    #16161a;
+      --border:  #2a2a30;
+      --accent:  #e8ff47;
+      --accent2: #47ffe8;
+      --text:    #e8e8ec;
+      --muted:   #6b6b78;
+      --danger:  #ff4747;
+      --success: #47ff8a;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      overflow-x: hidden;
+    }
+
+    /* ── Scanline overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(255,255,255,0.012) 2px,
+        rgba(255,255,255,0.012) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 36px;
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0;
+      background: rgba(10,10,11,0.92);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
+
+    .logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 26px;
+      letter-spacing: 4px;
+      color: var(--accent);
+      text-shadow: 0 0 20px rgba(232,255,71,0.4);
+    }
+
+    .logo span { color: var(--text); }
+
+    .badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 2px;
+      letter-spacing: 1px;
+    }
+
+    .badge.online { color: var(--success); border-color: var(--success); }
+    .badge.offline { color: var(--danger); border-color: var(--danger); }
+
+    /* ── Main layout ── */
+    main {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 0;
+      min-height: calc(100vh - 68px);
+    }
+
+    /* ── Left panel ── */
+    .panel-left {
+      border-right: 1px solid var(--border);
+      padding: 32px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .section-title {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: 4px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--surface);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .drop-zone::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(232,255,71,0.04) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(232,255,71,0.03);
+    }
+
+    .drop-zone.drag-over { transform: scale(1.01); }
+
+    .drop-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      display: block;
+      opacity: 0.6;
+    }
+
+    .drop-zone h3 {
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .drop-zone p {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer;
+    }
+
+    /* ── Preview ── */
+    .preview-box {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--surface);
+      display: none;
+    }
+
+    .preview-box.visible { display: block; }
+
+    .preview-box img {
+      width: 100%;
+      display: block;
+      max-height: 240px;
+      object-fit: contain;
+      background: #0d0d0f;
+    }
+
+    .preview-meta {
+      padding: 10px 14px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ── Run button ── */
+    .btn-run {
+      width: 100%;
+      padding: 16px;
+      background: var(--accent);
+      color: #0a0a0b;
+      border: none;
+      border-radius: 4px;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 20px;
+      letter-spacing: 3px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-run::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.1);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .btn-run:hover::after { opacity: 1; }
+    .btn-run:active { transform: scale(0.98); }
+    .btn-run:disabled {
+      background: var(--border);
+      color: var(--muted);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ── Confidence bar ── */
+    .conf-display {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 14px 16px;
+    }
+
+    .conf-display .label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .conf-display .value {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px;
+      color: var(--accent);
+      line-height: 1.2;
+    }
+
+    /* ── Right panel ── */
+    .panel-right {
+      padding: 32px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    /* ── Result image ── */
+    .result-frame {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      min-height: 320px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .result-placeholder {
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .result-placeholder .big-icon {
+      font-size: 48px;
+      display: block;
+      margin-bottom: 12px;
+      opacity: 0.3;
+    }
+
+    .result-placeholder p {
+      font-size: 13px;
+    }
+
+    .result-frame img {
+      width: 100%;
+      display: block;
+      max-height: 520px;
+      object-fit: contain;
+    }
+
+    .download-bar {
+      position: absolute; top: 12px; right: 12px;
+    }
+
+    .btn-download {
+      background: rgba(10,10,11,0.85);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 4px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 1px;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-download:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── Stats row ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px 18px;
+    }
+
+    .stat-card .stat-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .stat-card .stat-value {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 32px;
+      line-height: 1;
+      color: var(--accent2);
+    }
+
+    /* ── Detection table ── */
+    .detections-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .detections-panel .panel-header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .detections-panel .panel-header span {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .detections-panel .panel-header .count-badge {
+      background: var(--accent);
+      color: #0a0a0b;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 2px;
+      font-weight: 600;
+    }
+
+    .det-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+    }
+
+    .det-table th {
+      padding: 10px 18px;
+      text-align: left;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      font-weight: 400;
+    }
+
+    .det-table td {
+      padding: 9px 18px;
+      border-bottom: 1px solid rgba(42,42,48,0.5);
+      color: var(--text);
+    }
+
+    .det-table tr:last-child td { border-bottom: none; }
+    .det-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .conf-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 2px;
+      font-size: 11px;
+    }
+
+    .conf-high { background: rgba(71,255,138,0.12); color: var(--success); }
+    .conf-mid  { background: rgba(232,255,71,0.12);  color: var(--accent); }
+    .conf-low  { background: rgba(255,71,71,0.12);   color: var(--danger); }
+
+    /* ── Summary chips ── */
+    .summary-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 5px 12px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chip .chip-count {
+      background: var(--accent2);
+      color: #0a0a0b;
+      border-radius: 1px;
+      padding: 1px 6px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    /* ── Loading spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(10,10,11,0.3);
+      border-top-color: #0a0a0b;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error toast ── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--danger);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 4px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      transition: transform 0.3s ease;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Fade-in animation ── */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-in { animation: fadeIn 0.35s ease forwards; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      .panel-left { border-right: none; border-bottom: 1px solid var(--border); }
+      .stats-row { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">UI<span> DETECTOR</span></div>
+  <div class="badge" id="model-badge">CHECKING MODEL…</div>
+</header>
+
+<main>
+  <!-- ── Left Panel ── -->
+  <div class="panel-left">
+
+    <div>
+      <div class="section-title">Input Image</div>
+      <div class="drop-zone" id="drop-zone">
+        <span class="drop-icon">⊹</span>
+        <h3>Drop image here</h3>
+        <p>JPG · PNG · BMP · WEBP<br>Max 20 MB</p>
+        <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.bmp,.webp" />
+      </div>
+    </div>
+
+    <div class="preview-box" id="preview-box">
+      <img id="preview-img" src="" alt="preview" />
+      <div class="preview-meta">
+        <span id="preview-name">—</span>
+        <span id="preview-size">—</span>
+      </div>
+    </div>
+
+    <div class="conf-display">
+      <div class="label">Confidence Threshold</div>
+      <div class="value">0.25</div>
+    </div>
+
+    <button class="btn-run" id="btn-run" disabled>
+      RUN DETECTION
+    </button>
+
+  </div>
+
+  <!-- ── Right Panel ── -->
+  <div class="panel-right">
+
+    <div>
+      <div class="section-title">Annotated Output</div>
+      <div class="result-frame" id="result-frame">
+        <div class="result-placeholder" id="result-placeholder">
+          <span class="big-icon">◈</span>
+          <p>Output will appear here</p>
+        </div>
+        <img id="result-img" src="" alt="result" style="display:none" />
+        <div class="download-bar" id="download-bar" style="display:none">
+          <a id="btn-download" class="btn-download" download="detection_result.png">↓ SAVE</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-row" id="stats-row" style="display:none">
+      <div class="stat-card">
+        <div class="stat-label">Total Detections</div>
+        <div class="stat-value" id="stat-total">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Unique Classes</div>
+        <div class="stat-value" id="stat-classes">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Image Size</div>
+        <div class="stat-value" id="stat-size" style="font-size:18px;padding-top:8px">—</div>
+      </div>
+    </div>
+
+    <div id="summary-section" style="display:none">
+      <div class="section-title">Classes Found</div>
+      <div class="summary-chips" id="summary-chips"></div>
+    </div>
+
+    <div class="detections-panel" id="detections-panel" style="display:none">
+      <div class="panel-header">
+        <span>Detections</span>
+        <span class="count-badge" id="det-count">0</span>
+      </div>
+      <div style="overflow-x:auto; max-height: 320px; overflow-y:auto;">
+        <table class="det-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Class</th>
+              <th>Confidence</th>
+              <th>Bounding Box</th>
+            </tr>
+          </thead>
+          <tbody id="det-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const dropZone   = document.getElementById('drop-zone');
+  const fileInput  = document.getElementById('file-input');
+  const previewBox = document.getElementById('preview-box');
+  const previewImg = document.getElementById('preview-img');
+  const previewName= document.getElementById('preview-name');
+  const previewSz  = document.getElementById('preview-size');
+  const btnRun     = document.getElementById('btn-run');
+  const resultFrame= document.getElementById('result-frame');
+  const resultImg  = document.getElementById('result-img');
+  const placeholder= document.getElementById('result-placeholder');
+  const downloadBar= document.getElementById('download-bar');
+  const btnDownload= document.getElementById('btn-download');
+  const modelBadge = document.getElementById('model-badge');
+  const toast      = document.getElementById('toast');
+
+  let selectedFile = null;
+
+  // ── Model status check ──────────────────────────────────────────────────
+  fetch('/model-status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.ready) {
+        modelBadge.textContent = 'MODEL READY';
+        modelBadge.className = 'badge online';
+      } else {
+        modelBadge.textContent = 'MODEL NOT FOUND';
+        modelBadge.className = 'badge offline';
+        showToast('best.pt not found — place it next to app.py');
+      }
+    })
+    .catch(() => {
+      modelBadge.textContent = 'SERVER ERROR';
+      modelBadge.className = 'badge offline';
+    });
+
+  // ── File selection ──────────────────────────────────────────────────────
+  fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+
+  function handleFile(file) {
+    if (!file) return;
+    selectedFile = file;
+
+    const url = URL.createObjectURL(file);
+    previewImg.src = url;
+    previewBox.classList.add('visible');
+    previewName.textContent = file.name.length > 28 ? file.name.slice(0,25)+'…' : file.name;
+    previewSz.textContent = (file.size / 1024).toFixed(0) + ' KB';
+
+    btnRun.disabled = false;
+
+    // Reset output
+    resultImg.style.display = 'none';
+    placeholder.style.display = 'flex';
+    placeholder.style.flexDirection = 'column';
+    placeholder.style.alignItems = 'center';
+    downloadBar.style.display = 'none';
+    document.getElementById('stats-row').style.display = 'none';
+    document.getElementById('summary-section').style.display = 'none';
+    document.getElementById('detections-panel').style.display = 'none';
+  }
+
+  // ── Run detection ───────────────────────────────────────────────────────
+  btnRun.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    btnRun.innerHTML = '<span class="spinner"></span>';
+    btnRun.disabled = true;
+
+    const fd = new FormData();
+    fd.append('image', selectedFile);
+
+    try {
+      const res = await fetch('/detect', { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast(data.error || 'Detection failed');
+        return;
+      }
+
+      renderResult(data);
+
+    } catch (err) {
+      showToast('Network error — is the server running?');
+    } finally {
+      btnRun.textContent = 'RUN DETECTION';
+      btnRun.disabled = false;
+    }
+  });
+
+  function renderResult(data) {
+    // Annotated image
+    resultImg.src = data.image;
+    resultImg.style.display = 'block';
+    resultImg.classList.remove('fade-in');
+    void resultImg.offsetWidth;
+    resultImg.classList.add('fade-in');
+    placeholder.style.display = 'none';
+
+    // Download
+    btnDownload.href = data.image;
+    downloadBar.style.display = 'block';
+
+    // Stats
+    document.getElementById('stat-total').textContent  = data.total;
+    document.getElementById('stat-classes').textContent = Object.keys(data.summary).length;
+    document.getElementById('stat-size').textContent    = `${data.image_size.width}×${data.image_size.height}`;
+    document.getElementById('stats-row').style.display = 'grid';
+    document.getElementById('stats-row').classList.add('fade-in');
+
+    // Summary chips
+    const chips = document.getElementById('summary-chips');
+    chips.innerHTML = '';
+    for (const [name, count] of Object.entries(data.summary).sort()) {
+      chips.innerHTML += `<div class="chip">${name}<span class="chip-count">${count}</span></div>`;
+    }
+    document.getElementById('summary-section').style.display = data.total > 0 ? 'block' : 'none';
+
+    // Detections table
+    const tbody = document.getElementById('det-tbody');
+    tbody.innerHTML = '';
+    data.detections.forEach((d, i) => {
+      const cls = d.confidence >= 0.7 ? 'conf-high' : d.confidence >= 0.4 ? 'conf-mid' : 'conf-low';
+      tbody.innerHTML += `
+        <tr>
+          <td style="color:var(--muted)">${i+1}</td>
+          <td>${d.class}</td>
+          <td><span class="conf-pill ${cls}">${d.confidence.toFixed(3)}</span></td>
+          <td style="color:var(--muted)">(${d.bbox[0]}, ${d.bbox[1]}, ${d.bbox[2]}, ${d.bbox[3]})</td>
+        </tr>`;
+    });
+    document.getElementById('det-count').textContent = data.total;
+
+    if (data.total > 0) {
+      document.getElementById('detections-panel').style.display = 'block';
+      document.getElementById('detections-panel').classList.add('fade-in');
+    } else {
+      document.getElementById('detections-panel').style.display = 'none';
+    }
+  }
+
+  // ── Toast ───────────────────────────────────────────────────────────────
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3500);
+  }
+</script>
+</body>
+</html>
